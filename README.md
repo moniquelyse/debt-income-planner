@@ -2,6 +2,8 @@
 
 This app lets you track your debts, as well as project new loans and future income, and see what your payments look like going forward. Your data is entirely yours and lives on your computer, so you won't have to deal with the (in)security of service providers such as clouds or online spreadsheets. Everything is stored in this single folder, so if you want to back up or move your app, you can simply copy the whole folder, and that's it.
 
+The app is available in **English** and **Spanish**. You can switch the language at any time from within the app.
+
 ## License
 
 Free for non-commercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE). I made this to help people, so it isn't meant to be sold or packaged into a paid product or service. If you want to use it in a way the license doesn't cover, but it helps people, open an issue in this repository and we'll sort it out.
@@ -15,14 +17,14 @@ Free for non-commercial use under the [PolyForm Noncommercial License 1.0.0](LIC
 ## 2. Run the app
 
 1. Open a terminal
-2. Move to **this folder** (example: `cd Documents/name-of-this-folder`)
+2. Move to **this folder** (example: `cd Documents/debt-income-planner`)
 3. Type:
 
    ```
    node server.js
    ```
 
-4. Open http://localhost:3000 in your browser.
+4. The terminal will print a line like `Ready: http://localhost:3000`. Open _that_ address in your browser (the number may be different).
 
 To close the program, go back to the terminal where you started it, and press `Ctrl+C`. You can always restart the app (with step 2) and open localhost in whichever browser you like; your data will be saved, since it is stored automatically in the file `data.json`, which is created on the first run. You don't need to modify anything in the files in this folder.
 
