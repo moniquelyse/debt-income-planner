@@ -1,0 +1,911 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title></title>
+<script>document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
+<style>
+  /* the palette is picked by <html data-theme="light|dark"> (see applyTheme) */
+  :root, :root[data-theme="light"] {
+    color-scheme: light;   /* native pieces (scrollbars, pickers) follow the theme too */
+    --ink:#12141a;   /* the theme's black; the rest of the darks derive from it */
+    --bg:#d9dde6; --card:#e9ecf2; --raised:#fff; --text:var(--ink); --muted:#63697e; --line:#d4d9e4;
+    --field:#fff;   /* fill and resting border of the fields */
+    --dialog:var(--card);   /* modal background: not white, or the white fields would vanish */
+    --accent:#b7caac; --accentbg:color-mix(in srgb, var(--accent) 35%, var(--card)); --ok:#12805c; --okbg:#e3f5ee; --cov:#6d3fd1; --covbg:#ece5fb;
+    --bad:#b42318; --badbg:#fde8e6;
+    --ok-fill:#2bab7c; --cov-fill:#9d82ed; --bad-fill:#f0736a;   /* bars, swatches and stripes */
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ink:#12141a; --cream:#fefce4;   /* black and white of the theme */
+    --bg:var(--ink); --card:#181b23; --raised:#1f232d; --text:var(--cream); --muted:#98a2b3; --line:#2a2e3c;
+    --field:var(--line);
+    --dialog:var(--raised);
+    --accent:#cbfbb0; --accentbg:color-mix(in srgb, var(--accent) 14%, var(--card)); --ok:#5fd3a6; --okbg:#12332a; --cov:#b79cff; --covbg:#2b2147;
+    --bad:#ff8a80; --badbg:#3d1a17;
+    --ok-fill:#5fd3a6; --cov-fill:#b79cff; --bad-fill:#ff8a80;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 24px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--card); border-radius:22px; padding:16px; margin-bottom:16px; }
+  form, .fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  label { display:flex; flex-direction:column; font-size:14px; color:var(--muted); gap:4px; }
+  /* fields: border and fill share a colour until focus, when the border (same 2px) turns to the accent */
+  input:not([type=checkbox]):not([type=radio]), select, textarea {
+    --icon: var(--text);   /* colour of the little icons drawn inside the field (calendar, arrow) */
+    font:inherit; padding:8px 10px; border:2px solid var(--field); border-radius:8px; background-color:var(--field); color:var(--text); }
+  input:not([type=checkbox]):not([type=radio]):focus, select:focus, textarea:focus { --icon: var(--accent); border-color:var(--accent); outline:none; }
+  /* select: own arrow, so it can have room on the right and follow the text and accent colours */
+  select { appearance:none; -webkit-appearance:none; padding-right:40px;
+    background-image:linear-gradient(45deg, transparent 40%, var(--icon) 50%, transparent 60%), linear-gradient(135deg, transparent 40%, var(--icon) 50%, transparent 60%);
+    background-repeat:no-repeat; background-size:6px 6px, 6px 6px; background-position:right 19px center, right 13px center; }
+  /* date: the native calendar icon, redrawn with the field's icon colour */
+  input[type=date]::-webkit-calendar-picker-indicator { background:var(--icon); opacity:1; cursor:pointer; width:18px; height:18px; padding:0; margin-left:6px;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E") center / 18px 18px no-repeat;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E") center / 18px 18px no-repeat; }
+  /* every button: 14px semibold, 2px border, 5px radius; an icon inside sits 6px from the text */
+  button { font:inherit; font-size:14px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    padding:8px 14px; border-radius:5px; border:2px solid var(--accent); background:var(--accent); color:var(--ink); cursor:pointer; }
+  button svg { width:16px; height:16px; flex:none; }
+  button.mini { font-size:12px; padding:2px 8px; }   /* row actions: edit, remove */
+  button.ghost { background:transparent; color:var(--muted); border-color:var(--line); padding:3px 9px; }
+  form > button { grid-column:1 / -1; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); font-size:14px; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  td.acts { white-space:nowrap; text-align:right; }
+  tr.sel td { background:var(--accentbg); }
+  .empty { color:var(--muted); padding:8px 0; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+  .stat { background:var(--raised); border-radius:10px; padding:12px; }
+  .stat b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
+  .stat > span { display:block; font-size:12px; color:var(--muted); }
+  .pill { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; }
+  .pill.paid { background:var(--okbg); color:var(--ok); }
+  .pill.covered { background:var(--covbg); color:var(--cov); }
+  .pill.pending { background:var(--badbg); color:var(--bad); }
+  .pill.wait { background:var(--line); color:var(--muted); }
+  .pill.reserve { background:repeating-linear-gradient(45deg, var(--covbg) 0 4px, transparent 4px 8px); color:var(--cov); box-shadow:inset 0 0 0 1px var(--cov); }
+  .bar { display:flex; height:8px; background:var(--line); border-radius:4px; overflow:hidden; width:140px; }
+  .bar .o { background:var(--bad-fill); }
+  .bar i { display:block; height:100%; }
+  .bar .g { background:var(--ok-fill); } .bar .p { background:var(--cov-fill); }
+  .bar .r { background:repeating-linear-gradient(45deg, var(--cov-fill) 0 3px, var(--covbg) 3px 6px); }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-bottom:10px; align-items:center; }
+  .legend i.striped { background:repeating-linear-gradient(45deg, var(--cov-fill) 0 2px, var(--covbg) 2px 4px); }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; }
+  .selbar { font-size:13px; background:var(--accentbg); border-radius:8px; padding:8px 12px; margin-bottom:8px; }
+  .selbar:empty { display:none; }
+  .schead { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+  .schead h2 { margin:0; }
+  .schead .ghost, .schead .on { padding:6px 12px; }
+  .schead .on { box-shadow:0 0 0 3px var(--accentbg); }
+  .card.selecting { box-shadow:0 0 0 2px var(--accent); }
+  th.selcol, td.selcol { background:var(--accentbg); text-align:center; width:48px; }
+  /* no overflow on the container, or sticky anchors to it instead of the page */
+  #schedule th { position:sticky; top:0; z-index:2; background:var(--card); box-shadow:0 1px 0 var(--line); }
+  .banks { font-size:13px; }
+  label.chk { flex-direction:row; align-items:center; gap:6px; color:var(--text); }
+  label.chk input, td input[type=checkbox] { padding:0; }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--text); color:var(--bg);
+    padding:10px 14px; border-radius:10px; font-size:14px; display:none; align-items:center; gap:12px; z-index:10; }
+  #toast.show { display:flex; }
+  #toast button { background:transparent; border:2px solid currentColor; color:inherit; padding:3px 10px; }
+  fieldset { border:1px solid var(--line); border-radius:10px; padding:12px; margin:0; min-width:0; }
+  fieldset:disabled { opacity:.55; }
+  legend { padding:0 6px; font-weight:600; font-size:14px; }
+  #simResult th { position:sticky; top:0; z-index:2; background:var(--dialog); box-shadow:0 1px 0 var(--line); }
+  .span2 { grid-column:1 / -1; }
+  .newtag { color:var(--cov); font-weight:600; }
+  .simnote { font-size:13px; color:var(--muted); margin:10px 0; }
+  .simnote b { color:var(--text); }
+  #dlgSim { width:min(1000px, 96vw); max-height:92vh; overflow:auto; }
+  #dlgSim .sub { margin-bottom:14px; }
+  .simhead { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .simhead h2 { margin:0; }
+  .simhead .ghost { padding:6px 12px; }
+  dialog form.simform { display:grid; }
+  .simform .fields { margin-bottom:0; }
+  .simform .actions { display:flex; justify-content:flex-end; gap:8px; }
+  .simform .actions .ghost { padding:8px 14px; }
+  @media (max-width:760px) { .simform { grid-template-columns:1fr; } }
+  dialog { background:var(--dialog); color:var(--text); border:none; border-radius:22px; padding:20px; width:min(440px, 92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.45); }
+  dialog form { display:block; }
+  dialog .fields { margin-bottom:16px; }
+  dialog .actions { display:flex; justify-content:flex-end; gap:8px; }
+  dialog .actions button.ghost { padding:8px 14px; }
+  /* footer: no background, just a quiet line of text */
+  footer { max-width:1100px; margin:0 auto; padding:0 16px 40px; text-align:center; font-size:12px; line-height:1.6; color:var(--muted); }
+  footer p { margin:0; }
+  footer a { color:inherit; text-decoration:underline; text-underline-offset:2px; }
+  footer a:hover { color:var(--accent); }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:20px; }
+  #openSet { padding:6px 12px; white-space:nowrap; }
+  th small { display:block; font-weight:400; }
+  [hidden] { display:none !important; }
+  textarea { font-family:ui-monospace,Menlo,Consolas,monospace; resize:vertical; }
+  .hint { font-size:12px; color:var(--muted); }
+  .sched-status { font-size:12px; min-height:16px; }
+  .sched-status.bad { color:var(--bad); }
+  .dec { opacity:.45; }
+  .money { display:flex; }
+  .money:focus-within .cur { border-color:var(--accent); }
+  .money .cur { display:flex; align-items:center; padding:0 10px; border:2px solid var(--field); border-right:0;
+    border-radius:8px 0 0 8px; background:var(--raised); color:var(--muted); }
+  .money input:not([type=checkbox]):not([type=radio]) { flex:1; min-width:0; border-radius:0 8px 8px 0; }
+  .money input[readonly] { opacity:.7; }
+  /* every field reserves 20px below it (16 for the amount preview + the 4 of the gap), so rows are evenly spaced */
+  :is(form:not(#fSetup), .fields, fieldset) > label:not(.chk):not(.noair) { position:relative; padding-bottom:20px; }
+  .fmt { position:absolute; left:0; right:0; bottom:0; height:16px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; }
+  small.rep { display:block; font-size:12px; color:var(--muted); }
+  .ln { display:flex; align-items:center; gap:6px; height:26px; white-space:nowrap; }
+  .n .ln { justify-content:flex-end; }
+  .n .ln .tag { margin-right:auto; padding-right:10px; }
+  .ln .tag { color:var(--muted); font-size:12px; min-width:28px; }
+  .stat.multi b { font-size:16px; }
+  .currow { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .currow .cname { flex:1; color:var(--muted); font-size:13px; }
+  .currow button:disabled { opacity:.4; cursor:not-allowed; }
+  #dlgSet label, #dlgSetup label { margin-top:14px; }
+  #curList, #setupList { margin-top:10px; }
+  /* the tables below the forms: second level, like the tiles of the overview */
+  #creditList, #incomeList { margin-top:20px; background:var(--raised); border-radius:10px; padding:8px 12px; }
+  #creditList tr:last-child td, #incomeList tr:last-child td { border-bottom:none; }
+  #creditList:empty, #incomeList:empty { display:none; }
+  #dlgSetup .actions { margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1 data-i18n="h1"></h1>
+    <button type="button" class="ghost" id="openSet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span data-i18n="openSettings"></span></button>
+  </div>
+
+  <section class="card">
+    <h2 data-i18n="overview"></h2>
+    <div class="stats" id="totals"></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2 data-i18n="addLoanH"></h2>
+      <form id="fCredit">
+        <label class="span2"><span data-i18n="name"></span><input name="bank" required data-i18n-ph="namePh"></label>
+        <label><span data-i18n="currency"></span><select name="currency"></select></label>
+        <label><span data-i18n="instType"></span><select name="kind"><option value="fixed" data-i18n="fixedInst"></option><option value="variable" data-i18n="variableInst"></option></select></label>
+        <label data-kind="fixed"><span data-i18n="instAmount"></span><span class="money"><span class="cur"></span><input name="amount" type="number" min="0.01" step="any" required></span><small class="fmt"></small></label>
+        <label data-kind="fixed"><span data-i18n="nMonths"></span><input name="months" type="number" min="1" step="1" required></label>
+        <label data-kind="fixed" class="span2"><span data-i18n="firstInst"></span><input name="firstDate" type="date" required></label>
+        <label data-kind="variable" class="span2 noair"><span data-i18n="scheduleLabel"></span><textarea name="schedule" rows="6" required spellcheck="false" data-i18n-ph="schedulePh"></textarea><small class="hint" data-i18n="scheduleHint"></small><small class="sched-status"></small></label>
+        <button data-i18n="addLoan"></button>
+      </form>
+      <div id="creditList"></div>
+    </section>
+
+    <section class="card">
+      <h2 data-i18n="declareH"></h2>
+      <form id="fIncome">
+        <label class="span2"><span data-i18n="comment"></span><input name="note" data-i18n-ph="commentPh"></label>
+        <label><span data-i18n="currency"></span><select name="currency"></select></label>
+        <label><span data-i18n="amount"></span><span class="money"><span class="cur"></span><input name="amount" type="number" min="0.01" step="any" required></span><small class="fmt"></small></label>
+        <label><span data-i18n="repeats"></span><select name="repeat" required><option value="" disabled selected data-i18n="choose"></option><option value="once" data-i18n="once"></option><option value="monthly" data-i18n="monthly"></option></select></label>
+        <label data-repeat="once"><span data-i18n="incDate"></span><input name="date" type="date" required></label>
+        <label data-repeat="monthly"><span data-i18n="untilDate"></span><input name="until" type="date"></label>
+        <label class="chk span2" data-repeat="monthly"><input type="checkbox" name="carry"> <span data-i18n="carry"></span></label>
+        <small class="hint span2" data-repeat="once" data-i18n="incomeHintOnce"></small>
+        <small class="hint span2" data-repeat="monthly" data-i18n="incomeHintMonthly"></small>
+        <button data-i18n="addIncome"></button>
+      </form>
+      <div id="incomeList"></div>
+    </section>
+  </div>
+
+  <section class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div><h2 style="margin:0 0 2px" data-i18n="projection"></h2>
+      <span class="sub" style="margin:0" data-i18n="projectionSub"></span></div>
+    <button id="openSim" data-i18n="projectScenario"></button>
+  </section>
+
+  <section class="card" id="schedCard">
+    <div class="schead">
+      <h2 data-i18n="futureH"></h2>
+      <button type="button" class="ghost" id="toggleSel" data-toggle-sel="1"></button>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--ok-fill)"></i><span data-i18n="paid"></span></span>
+      <span><i style="background:var(--cov-fill)"></i><span data-i18n="legendCovered"></span></span>
+      <span><i class="striped"></i><span data-i18n="legendReserve"></span></span>
+      <span><i style="background:var(--line)"></i><span data-i18n="pending"></span></span>
+      <span><i style="background:var(--bad-fill)"></i><span data-i18n="overdue"></span></span>
+    </div>
+    <div class="selbar" id="selbar"></div>
+    <div class="scroll" id="schedule"></div>
+  </section>
+</main>
+
+<footer>
+  <p><span data-i18n="intro"></span> <span id="status"></span></p>
+  <p id="credits"></p>
+</footer>
+
+<dialog id="dlgSim">
+  <div class="simhead"><h2 data-i18n="simTitle"></h2><button type="button" class="ghost" id="closeSim" data-i18n="close"></button></div>
+  <p class="sub" data-i18n="simSub"></p>
+    <form id="fSim" class="simform">
+      <label class="span2"><span data-i18n="simCur"></span><select name="simCur"></select></label>
+      <fieldset id="fsIncome" disabled>
+        <legend><label class="chk"><input type="checkbox" id="useIncome"> <span data-i18n="simIncome"></span></label></legend>
+        <div class="fields">
+          <label><span data-i18n="amount"></span><span class="money"><span class="cur"></span><input name="inAmount" type="number" min="0.01" step="any" required></span><small class="fmt"></small></label>
+          <label><span data-i18n="repeats"></span><select name="repeat" required><option value="" disabled selected data-i18n="choose"></option><option value="once" data-i18n="once"></option><option value="monthly" data-i18n="monthly"></option></select></label>
+          <label data-repeat="once" class="span2"><span data-i18n="incDate"></span><input name="inDate" type="date" required></label>
+          <label data-repeat="monthly" class="span2"><span data-i18n="untilDate"></span><input name="inUntil" type="date"></label>
+          <label class="chk span2" data-repeat="monthly"><input type="checkbox" name="inCarry"> <span data-i18n="carry"></span></label>
+        </div>
+      </fieldset>
+      <fieldset id="fsCredit" disabled>
+        <legend><label class="chk"><input type="checkbox" id="useCredit"> <span data-i18n="simLoan"></span></label></legend>
+        <div class="fields">
+          <label class="span2"><span data-i18n="bankName"></span><input name="crName" data-i18n-ph="quotedLoan"></label>
+          <label><span data-i18n="receivedAmt"></span><span class="money"><span class="cur"></span><input name="crReceived" type="number" min="1" step="any" required></span><small class="fmt"></small></label>
+          <label><span data-i18n="firstInst"></span><input name="crFirst" type="date" required></label>
+          <label><span data-i18n="instAmount"></span><span class="money"><span class="cur"></span><input name="crAmount" type="number" min="0.01" step="any" required></span><small class="fmt"></small></label>
+          <label><span data-i18n="nMonths"></span><input name="crMonths" type="number" min="1" step="1" required></label>
+          <label class="span2"><span data-i18n="totalCost"></span><span class="money"><span class="cur"></span><input name="crTotal" type="number" min="0.01" step="any" required></span><small class="fmt"></small></label>
+          <label class="chk span2"><input type="checkbox" id="crCover"> <span data-i18n="useForDebt"></span></label>
+          <fieldset id="fsCover" class="span2" hidden disabled style="border:0;padding:0">
+            <label class="chk"><input type="checkbox" id="crCoverAll" checked> <span data-i18n="coverAll"></span></label>
+            <label><span data-i18n="debtAmount"></span><span class="money"><span class="cur"></span><input name="crCoverAmt" type="number" min="1" step="any" required></span><small class="fmt"></small></label>
+          </fieldset>
+        </div>
+      </fieldset>
+      <div class="actions span2">
+        <button type="button" class="ghost" id="clearSim" data-i18n="clear"></button>
+        <button data-i18n="calcProjection"></button>
+      </div>
+    </form>
+  <div id="simResult"></div>
+</dialog>
+<dialog id="dlgSet">
+  <div class="simhead"><h2 data-i18n="settings"></h2><button type="button" class="ghost" id="closeSet" data-i18n="close"></button></div>
+  <label><span data-i18n="language"></span>
+    <select id="langSel"></select>
+  </label>
+  <label><span data-i18n="theme"></span>
+    <select id="themeSel"><option value="system" data-i18n="themeSystem"></option><option value="light" data-i18n="themeLight"></option><option value="dark" data-i18n="themeDark"></option></select>
+  </label>
+  <p class="sub" style="margin-top:18px" data-i18n="curSub"></p>
+  <label><span data-i18n="addCur"></span>
+    <select id="curAdd"></select>
+  </label>
+  <div id="curList"></div>
+</dialog>
+<dialog id="dlgSetup">
+  <form id="fSetup">
+    <h2 data-i18n="setupH"></h2>
+    <label><span data-i18n="language"></span>
+      <select id="langSetup"></select>
+    </label>
+    <label><span data-i18n="currencies"></span>
+      <select id="setupAdd"></select>
+    </label>
+    <div id="setupList"></div>
+    <p class="sub" style="margin:16px 0 0" data-i18n="setupNote"></p>
+    <div class="actions"><button data-i18n="continue"></button></div>
+  </form>
+</dialog>
+<dialog id="dlg"></dialog>
+<div id="toast"></div>
+
+<script src="i18n.js"></script>
+<script src="calc.js"></script>
+<script src="money.js"></script>
+<script>
+
+const REPO_URL = 'https://github.com/moniquelyse/debt-income-planner';
+
+// ---------- language ----------
+const FALLBACK_LANG = 'en';
+const detectLang = () => { const l = (navigator.language || '').slice(0, 2).toLowerCase(); return I18N[l] ? l : FALLBACK_LANG; };
+let state = { credits: [], incomes: [], paid: {}, nextId: 1, settings: { currencies: [], lang: detectLang(), theme: 'system' } };
+let sched = null;
+const selected = new Set();   // months ticked for bulk edit
+let selectMode = false;
+
+const $ = id => document.getElementById(id);
+// Current month ('YYYY-MM'): income before it is ignored and unpaid instalments before it are overdue
+const todayDate = new Date().toLocaleDateString('en-CA');
+const todayKey = todayDate.slice(0, 7);
+const lang = () => state.settings.lang;
+// t('key', {param}) fills {param} in the text
+const t = (k, p) => ((I18N[lang()] || {})[k] ?? I18N[FALLBACK_LANG][k] ?? k).replace(/\{(\w+)\}/g, (_, n) => p[n]);
+const tn = (k, n) => t(k + (n === 1 ? '_one' : '_other'), { n });   // picks the _one / _other form
+// the language pickers are built from the language sheet
+for (const sel of [$('langSel'), $('langSetup')]) {
+  sel.innerHTML = Object.entries(I18N).sort((a, b) => a[1]._name.localeCompare(b[1]._name))   // alphabetical, each in its own language
+    .map(([code, d]) => `<option value="${code}">${d._name}</option>`).join('');
+}
+function applyLang() {
+  document.documentElement.lang = lang();
+  document.title = t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  $('langSel').value = $('langSetup').value = lang();
+  const link = (href, text) => `<a href="${href}" target="_blank" rel="noopener">${text}</a>`;
+  $('credits').innerHTML = t('credits', { ragna: link('https://www.ragnalabs.com', 'Ragna Labs'), github: link(REPO_URL, 'GitHub') });
+  showStatus();
+}
+
+// ---------- currencies ----------
+const ALL_CUR = Intl.supportedValuesOf('currency');
+const curNamesBy = {};
+function curName(c) {
+  try { return (curNamesBy[lang()] = curNamesBy[lang()] || new Intl.DisplayNames([uiLocale()], { type: 'currency' })).of(c); }
+  catch (e) { return c; }
+}
+const curs = () => state.settings.currencies;
+const mainCur = () => curs()[0];
+const curOf = x => x.currency;
+// options of the "add a currency" pickers: a placeholder, then every currency not chosen yet
+const addCurOptions = chosen => `<option value="" disabled selected>${t('choose')}</option>` +
+  ALL_CUR.filter(c => !chosen.includes(c)).map(c => `<option value="${c}">${c} · ${esc(curName(c))}</option>`).join('');
+// Regional format: the language sheet's, or (with \`_followBrowser\`) the browser's regional variant of the same
+// language, e.g. es-CL or es-ES depending on who opens the app.
+function uiLocale() {
+  const d = I18N[lang()];
+  if (d._followBrowser) {
+    const own = (navigator.languages || [navigator.language]).find(l => l && l.toLowerCase().startsWith(lang() + '-'));
+    if (own) return own;
+  }
+  return d._locale;
+}
+// Returns HTML (decimals dimmed); each currency follows its own country's convention, see money.js
+const money = (n, cur) => Money.format(n, cur, uiLocale());
+function normalizeSettings() {
+  const s = state.settings = state.settings || {};
+  s.currencies = (Array.isArray(s.currencies) ? s.currencies : []).filter(c => ALL_CUR.includes(c));
+  if (!I18N[s.lang]) s.lang = detectLang();
+  if (!['system', 'light', 'dark'].includes(s.theme)) s.theme = 'system';
+}
+// 'system' follows the operating system, also while the page is open
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() {
+  const theme = state.settings.theme;
+  document.documentElement.dataset.theme = theme === 'system' ? (systemDark.matches ? 'dark' : 'light') : theme;
+  $('themeSel').value = theme;
+}
+systemDark.addEventListener('change', applyTheme);
+// `extra`: currency of the item being edited, kept even if it is no longer preferred
+function curOptions(selected, extra) {
+  return [...new Set(extra ? [...curs(), extra] : curs())]
+    .map(c => `<option value="${c}"${c === selected ? ' selected' : ''}>${c} · ${esc(curName(c))}</option>`).join('');
+}
+const monthLabel = k => { const [y, m] = k.split('-'); return I18N[lang()]._months[m - 1] + ' ' + y; };
+const dateLabel = s => s.split('-').reverse().join('-');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let ready = false;
+let statusKey = 'loading', statusBad = false;
+function showStatus() {
+  const el = $('status'); el.textContent = t(statusKey); el.style.color = statusBad ? 'var(--bad)' : 'var(--muted)';
+}
+function setStatus(key, bad) { statusKey = key; statusBad = !!bad; showStatus(); }
+function save() {
+  if (!ready) return;
+  fetch('/api/data', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) })
+    .then(r => { if (!r.ok) throw 0; setStatus('saved'); })
+    .catch(() => setStatus('saveFail', true));
+}
+async function load() {
+  let d;
+  try { d = await (await fetch('/api/data')).json(); }
+  catch (e) { return setStatus('noServer', true); }
+  if (d) Object.assign(state, d);
+  normalizeSettings();
+  ready = true; applyTheme(); applyLang(); save(); render();
+  if (!curs().length) $('dlgSetup').showModal();   // first run: ask for language and currencies
+}
+
+// ---------- undo ----------
+const undoStack = [];
+let toastTimer;
+function toast(msg) {
+  const el = $('toast');
+  el.innerHTML = `${esc(msg)} <button data-undo="1">${t('undo')}</button>`;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 8000);
+}
+function removing(msg) {   // call before removing anything
+  undoStack.push(JSON.stringify(state));
+  if (undoStack.length > 50) undoStack.shift();
+  toast(msg);
+}
+function undo() {
+  if (!undoStack.length) return;
+  const settings = state.settings;   // undo must not revert settings
+  state = JSON.parse(undoStack.pop());
+  state.settings = settings;
+  $('toast').classList.remove('show');
+  save(); render();
+}
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return;
+  if (document.querySelector('dialog[open]') || /^(INPUT|TEXTAREA)$/.test(e.target.tagName) && e.target.type !== 'checkbox') return;
+  e.preventDefault(); undo();
+});
+
+// ---------- modal ----------
+const dlg = $('dlg');
+// Resolves to FormData on save, or null if cancelled.
+function modal(title, body, okText = t('save')) {
+  return new Promise(resolve => {
+    dlg.innerHTML = `<form id="dForm"><h2>${title}</h2><div class="fields">${body}</div>
+      <div class="actions"><button type="button" class="ghost" id="dCancel">${t('cancel')}</button><button>${okText}</button></div></form>`;
+    $('dCancel').onclick = () => dlg.close();
+    dlg.onclose = () => resolve(null);
+    $('dForm').onsubmit = e => { e.preventDefault(); resolve(new FormData(e.target)); dlg.close(); };
+    syncMoney($('dForm'));
+    syncGroups($('dForm'));
+    dlg.showModal();
+  });
+}
+const sepOf = cur => Money.separators(cur, uiLocale());
+// A variable schedule as editable text: amounts in the currency's decimal convention, without grouping
+const scheduleText = c => c.schedule.map(r => r.month + ' ' + String(r.amount).replace('.', sepOf(curOf(c)).decimal)).join('\n');
+const creditFields = c => `
+  <label class="span2"><span>${t('name')}</span><input name="bank" required value="${esc(c.bank)}"></label>
+  <label><span>${t('currency')}</span><select name="currency">${curOptions(curOf(c), curOf(c))}</select></label>
+  <label><span>${t('instType')}</span><select name="kind"><option value="fixed">${t('fixedInst')}</option><option value="variable"${c.schedule ? ' selected' : ''}>${t('variableInst')}</option></select></label>
+  <label data-kind="fixed"><span>${t('instAmount')}</span><span class="money"><span class="cur"></span><input name="amount" type="number" min="0.01" step="any" required value="${c.amount ?? ''}"></span><small class="fmt"></small></label>
+  <label data-kind="fixed"><span>${t('nMonths')}</span><input name="months" type="number" min="1" step="1" required value="${c.months ?? ''}"></label>
+  <label data-kind="fixed" class="span2"><span>${t('firstInst')}</span><input name="firstDate" type="date" required value="${c.firstDate || next5}"></label>
+  <label data-kind="variable" class="span2 noair"><span>${t('scheduleLabel')}</span><textarea name="schedule" rows="6" required spellcheck="false" placeholder="${esc(t('schedulePh'))}">${c.schedule ? esc(scheduleText(c)) : ''}</textarea><small class="hint">${t('scheduleHint')}</small><small class="sched-status"></small></label>`;
+// Loan fields from a form (create or edit); the group that does not apply is disabled, so it is not submitted.
+function creditFromForm(f) {
+  const base = { bank: f.get('bank').trim(), currency: f.get('currency') };
+  if (f.get('kind') !== 'variable') {
+    return { ...base, amount: +f.get('amount'), months: +f.get('months'), firstDate: f.get('firstDate'), schedule: undefined };
+  }
+  const { rows } = Calc.parseSchedule(f.get('schedule'), sepOf(base.currency));
+  return { ...base, schedule: rows, amount: undefined, months: undefined, firstDate: undefined };
+}
+const incomeFields = i => `
+  <label class="span2"><span>${t('comment')}</span><input name="note" value="${esc(i.note || '')}"></label>
+  <label><span>${t('currency')}</span><select name="currency">${curOptions(curOf(i), curOf(i))}</select></label>
+  <label><span>${t('amount')}</span><span class="money"><span class="cur"></span><input name="amount" type="number" min="0.01" step="any" required value="${i.amount}"></span><small class="fmt"></small></label>
+  <label><span>${t('repeats')}</span><select name="repeat"><option value="once">${t('once')}</option><option value="monthly"${i.repeat === 'monthly' ? ' selected' : ''}>${t('monthly')}</option></select></label>
+  <label data-repeat="once"><span>${t('incDate')}</span><input name="date" type="date" required min="${todayDate}" value="${i.date >= todayDate ? i.date : todayDate}"></label>
+  <label data-repeat="monthly"><span>${t('untilDate')}</span><input name="until" type="date" min="${todayDate}" value="${i.until || ''}"></label>
+  <label class="chk span2" data-repeat="monthly"><input type="checkbox" name="carry"${i.carry ? ' checked' : ''}> <span>${t('carry')}</span></label>`;
+// Income fields from a form (create or edit). A recurring income has no start date: it is anchored when first
+// declared (past months are ignored anyway) and runs up to `until`, or with no end date indefinitely.
+const incomeFromForm = (f, prev) => {
+  const monthly = f.get('repeat') === 'monthly';
+  return { date: monthly ? (prev && prev.repeat === 'monthly' ? prev.date : todayDate) : f.get('date'),
+    amount: +f.get('amount'), currency: f.get('currency'), note: f.get('note').trim(),
+    repeat: monthly ? 'monthly' : undefined, until: monthly && f.get('until') ? f.get('until') : undefined,
+    carry: monthly && f.get('carry') ? true : undefined };
+};
+const repeatText = i => (!i.until ? t('noEndShort') : i.until.slice(0, 7) < todayKey ? t('pastIncome') : t('untilMonth', { month: monthLabel(i.until.slice(0, 7)) }))
+  + (i.carry ? ' · ' + t('carryTag') : '');
+
+// ---------- render ----------
+const EMPTY = Calc.schedule([], [], {});
+const S = c => sched.by[c] || EMPTY;
+// preferred currencies first, any others after
+const orderCurs = list => [...list].sort((a, b) => {
+  const rank = c => { const i = curs().indexOf(c); return i < 0 ? curs().length : i; };
+  return rank(a) - rank(b) || a.localeCompare(b);
+});
+const barHtml = r => {
+  const w = v => `style="width:${v / r.due * 100}%"`;
+  return `<div class="bar"><i class="g" ${w(r.paidAmount)}></i><i class="o" ${w(r.overdue)}></i><i class="p" ${w(r.covered - r.fromReserve)}></i><i class="r" ${w(r.fromReserve)}></i></div>`;
+};
+const STATUS = () => ({ paid: t('paid'), covered: t('covered'), pending: t('pending') });
+
+function render() {
+  for (const sel of [$('fCredit').elements.currency, $('fIncome').elements.currency, $('fSim').elements.simCur]) {
+    const picked = sel.dataset.picked;   // what the person picked, otherwise the main currency
+    sel.innerHTML = curOptions(curs().includes(picked) ? picked : mainCur());
+    syncMoney(sel.form);
+  }
+  renderSettings();
+  renderSetup();
+
+  $('creditList').innerHTML = state.credits.length ? `<table><thead><tr>
+    <th>${t('thName')}</th><th class="n">${t('thInst')}</th><th class="n">${t('thMonths')}</th><th>${t('thFirst')}</th><th></th></tr></thead><tbody>` +
+    state.credits.map(c => `<tr><td>${esc(c.bank)}</td><td class="n">${c.schedule ? t('variableInst') : money(c.amount, curOf(c))}</td>
+      <td class="n">${c.schedule ? c.schedule.length : c.months}</td><td>${c.schedule ? monthLabel(c.schedule[0].month) : dateLabel(c.firstDate)}</td>
+      <td class="acts"><button class="ghost mini" data-edit-credit="${c.id}">${t('edit')}</button>
+      <button class="ghost mini" data-del-credit="${c.id}">${t('remove')}</button></td></tr>`).join('') +
+    '</tbody></table>' : '';
+
+  const incs = [...state.incomes].sort((a, b) => a.date.localeCompare(b.date));
+  $('incomeList').innerHTML = incs.length ? `<table><thead><tr>
+    <th>${t('thDate')}</th><th class="n">${t('thAmount')}</th><th>${t('thComment')}</th><th></th></tr></thead><tbody>` +
+    incs.map(i => `<tr><td>${i.repeat === 'monthly' ? t('monthlyShort') : dateLabel(i.date)}</td><td class="n">${money(i.amount, curOf(i))}${i.repeat === 'monthly' ? `<small class="rep">${repeatText(i)}</small>` : i.date.slice(0, 7) < todayKey ? `<small class="rep">${t('pastIncome')}</small>` : ''}</td>
+      <td>${esc(i.note || '')}</td>
+      <td class="acts"><button class="ghost mini" data-edit-income="${i.id}">${t('edit')}</button>
+      <button class="ghost mini" data-del-income="${i.id}">${t('remove')}</button></td></tr>`).join('') +
+    '</tbody></table>' : '';
+
+  // one schedule per currency; currencies are never added together
+  const s = sched = Calc.scheduleAll(state.credits, state.incomes, state.paid, todayDate);
+  s.itemById = {};
+  s.months.forEach(m => Object.values(m.by).forEach(r => r.items.forEach(i => { s.itemById[i.id] = i; })));
+  for (const k of [...selected]) if (!s.months.some(m => m.key === k)) selected.delete(k);
+
+  const all = orderCurs([...new Set([...curs(), ...s.currencies])]);   // preferred currencies, plus any in use
+  const cols = orderCurs(s.currencies.filter(c => s.by[c].rows.length));   // with instalments
+  const multi = cols.length > 1;
+
+  // one line per currency
+  const each = f => all.map(c => f(S(c), c));
+  const stat = (lines, label) => `<div class="stat${lines.length > 1 ? ' multi' : ''}">${lines.map(v => `<b>${v}</b>`).join('')}<span>${label}</span></div>`;
+
+  $('totals').innerHTML =
+    stat(each((x, c) => money(x.totalDue, c)), t('totalBorrowed')) +
+    stat(each((x, c) => money(x.totalPaid, c)), t('totalPaid')) +
+    stat(each((x, c) => money(x.totalPending, c)), t('leftToPay'));
+
+  $('toggleSel').textContent = t(selectMode ? 'bulkDone' : 'bulkEdit');
+  $('toggleSel').className = selectMode ? 'on' : 'ghost';
+  $('schedCard').classList.toggle('selecting', selectMode);
+  $('selbar').innerHTML = !selectMode ? '' : selected.size
+    ? `${tn('selected', selected.size)}
+       <button class="ghost" data-clear-sel="1">${t('clearSel')}</button>` : t('bulkHint');
+
+  // schedule: one total per currency, then what is paid / covered / pending as labels with their amounts, and a bar
+  const allSel = s.months.length && s.months.every(m => selected.has(m.key));
+  // Labels for what is paid, overdue, covered and still waiting. Pending is red when overdue, grey when it is just not due yet.
+  const chips = (r, cur) => [
+    [r.paidAmount, 'paid', 'paid'], [r.overdue, 'pending', 'pending'], [r.covered - r.fromReserve, 'covered', 'covered'],
+    [r.fromReserve, 'reserve', 'reserve'], [r.waiting - r.covered, 'wait', 'pending'],
+  ].filter(([v]) => v > 0).map(([v, cls, label]) => `<span class="pill ${cls}">${t(label)} ${money(v, cur)}</span>`).join('');
+  $('schedule').innerHTML = s.months.length ? `<table><thead><tr>
+    <th>${t('thMonth')}</th><th>${t('thInstalments')}</th><th class="n">${t('totalInst')}</th><th>${t('thStatus')}</th><th>${t('progress')}</th>
+    ${selectMode ? `<th class="selcol"><input type="checkbox" data-sel-all="1" title="${t('selectAll')}"${allSel ? ' checked' : ''}></th>` : ''}</tr></thead><tbody>` +
+    s.months.map(m => {
+      const rs = cols.map(c => m.by[c]);
+      const detail = rs.flatMap(r => r ? r.items : []).map(i => `<label class="chk"><input type="checkbox" data-paid="${i.id}" data-credit="${i.creditId}" data-month="${m.key}"${i.paid ? ' checked' : ''}>
+        <span>${esc(i.bank)} ${money(i.amount, curOf(i))}</span></label>`).join('');
+      // the total, the labels and the bars each stack one fixed-height line per currency, so they line up
+      const tag = k => multi ? `<span class="tag">${cols[k]}</span>` : '';
+      const totals = rs.map((r, k) => r ? `<div class="ln">${tag(k)}<span>${money(r.due, cols[k])}</span></div>` : '').join('');
+      const status = rs.map((r, k) => r ? `<div class="ln">${tag(k)}${chips(r, cols[k])}</div>` : '').join('');
+      const bars = rs.map(r => r ? `<div class="ln">${barHtml(r)}</div>` : '').join('');
+      return `<tr class="${selected.has(m.key) ? 'sel' : ''}">
+        <td>${monthLabel(m.key)}</td><td class="banks">${detail}</td><td class="n">${totals}</td><td>${status}</td><td>${bars}</td>
+        ${selectMode ? `<td class="selcol"><input type="checkbox" data-sel="${m.key}"${selected.has(m.key) ? ' checked' : ''}></td>` : ''}</tr>`;
+    }).join('') + '</tbody></table>' : `<p class="empty">${t('emptySchedule')}</p>`;
+  syncCover();
+  syncGroups($('fCredit'));
+  syncGroups($('fIncome'));
+  syncGroups($('fSim'));
+  renderSim();
+}
+
+// ---------- projection ----------
+// A scenario lives in a single currency: only that currency's schedule is compared.
+let simParams = null;
+const peak = s => Math.max(0, ...s.rows.map(r => r.unpaid));
+const monthNum = k => { const [y, m] = k.split('-').map(Number); return y * 12 + m; };
+const signed = (n, f) => (n > 0 ? '+' : n < 0 ? '−' : '') + f(Math.abs(n));
+
+// Builds the simulated future: real data in that currency plus the hypothetical events.
+function buildSim(p) {
+  const mine = x => curOf(x) === p.currency;
+  const credits = state.credits.filter(mine), incomes = state.incomes.filter(mine);
+  if (p.income) {
+    const i = p.income, monthly = i.repeat === 'monthly';
+    incomes.push({ id: 'sim-in', date: monthly ? todayDate : i.date, amount: i.amount,
+      repeat: monthly ? 'monthly' : undefined, until: monthly ? i.until : undefined, carry: monthly && i.carry });
+  }
+  if (p.credit) {
+    const c = p.credit;
+    credits.push({ id: 'sim-cr', bank: c.name || t('quotedLoan'), amount: c.amount, months: c.months, firstDate: c.first });
+    // Only what goes to debt enters the calculation: it covers instalments from the first instalment's month, including the loan's own.
+    if (c.cover) incomes.push({ id: 'sim-cr-in', date: c.disb, amount: c.cover });
+  }
+  return Calc.schedule(credits, incomes, state.paid, todayDate);
+}
+
+function renderSim() {
+  const el = $('simResult');
+  if (!simParams) { el.innerHTML = ''; return; }
+  const p = simParams, cur = p.currency, m = n => money(n, cur), status = STATUS();
+  const b = S(cur), s = buildSim(p);
+  const lastK = x => x.rows.length ? x.rows[x.rows.length - 1].key : null;
+  const rowsCmp = [
+    [t('leftToPay'), m(b.totalPending), m(s.totalPending), signed(s.totalPending - b.totalPending, m)],
+    [t('leftToCover'), m(b.totalMissing), m(s.totalMissing), signed(s.totalMissing - b.totalMissing, m)],
+    [t('peakInst'), m(peak(b)), m(peak(s)), signed(peak(s) - peak(b), m)],
+    [t('coveredMonthsInc'), b.fullMonths, s.fullMonths, signed(s.fullMonths - b.fullMonths, String)],
+    [t('incomeToAllocate'), m(b.unusedIncome), m(s.unusedIncome), signed(s.unusedIncome - b.unusedIncome, m)],
+    [t('lastPayment'), lastK(b) ? monthLabel(lastK(b)) : '—', lastK(s) ? monthLabel(lastK(s)) : '—',
+      lastK(b) && lastK(s) ? signed(monthNum(lastK(s)) - monthNum(lastK(b)), n => tn('months', n)) : ''],
+  ];
+  const notes = [t('simNoteCur', { cur })];
+  if (p.income) {
+    const i = p.income;
+    notes.push(i.repeat === 'monthly'
+      ? t('simNoteIncomeMonthly', { amount: m(i.amount), until: i.until ? t('untilMonth', { month: monthLabel(i.until.slice(0, 7)) }) : t('noEndShort') })
+      : t('simNoteIncomeOnce', { amount: m(i.amount), date: dateLabel(i.date) }));
+  }
+  if (p.credit) {
+    const c = p.credit, total = c.amount * c.months;
+    notes.push(t('simNoteLoan', { received: m(c.received), total: m(total), diff: m(total - c.received) }) +
+      (c.cover ? t('simNoteCover', { cover: m(c.cover) }) : ''));
+  }
+  const baseByKey = new Map(b.rows.map(r => [r.key, r]));
+  el.innerHTML = notes.map(n => `<p class="simnote">${n}</p>`).join('') +
+    `<table><thead><tr><th>${t('indicator')}</th><th class="n">${t('today')}</th><th class="n">${t('projected')}</th><th class="n">${t('difference')}</th></tr></thead><tbody>` +
+    rowsCmp.map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n">${r[2]}</td><td class="n">${r[3]}</td></tr>`).join('') +
+    `</tbody></table><div class="scroll" style="margin-top:16px"><table><thead><tr>
+    <th>${t('thMonth')}</th><th>${t('thInstShort')}</th><th class="n">${t('totalInst')}</th><th class="n">${t('thPaid')}</th><th class="n">${t('thCovered')}</th>
+    <th class="n">${t('pendingToday')}</th><th class="n">${t('pendingProjected')}</th><th>${t('progress')}</th><th></th></tr></thead><tbody>` +
+    s.rows.map(r => {
+      const base = baseByKey.get(r.key);
+      const detail = r.items.map(i => i.creditId === 'sim-cr'
+        ? `<span class="newtag">${esc(i.bank)} ${m(i.amount)} ${t('quoteTag')}</span>`
+        : `${i.paid ? '✓ ' : ''}${esc(i.bank)} ${m(i.amount)}`).join(' · ');
+      return `<tr><td>${monthLabel(r.key)}</td><td class="banks">${detail}</td>
+        <td class="n">${m(r.due)}</td><td class="n">${m(r.paidAmount)}</td><td class="n">${m(r.covered)}</td>
+        <td class="n">${base ? m(base.missing) : '—'}</td><td class="n">${m(r.missing)}</td>
+        <td>${barHtml(r)}</td>
+        <td><span class="pill ${r.status === 'pending' ? (r.overdue > 0 ? 'pending' : 'wait') : r.status}">${status[r.status]}</span></td></tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+$('useIncome').addEventListener('change', e => { $('fsIncome').disabled = !e.target.checked; });
+$('useCredit').addEventListener('change', e => { $('fsCredit').disabled = !e.target.checked; syncCover(); });
+$('crCover').addEventListener('change', syncCover);
+// Beside each amount field: the form's currency on the left, and below it the number with that currency's separators.
+// The field stays numeric, so there is nothing to parse and no mask to get out of step.
+function syncMoney(form) {
+  const sel = form && form.querySelector('select[name=currency], select[name=simCur]');
+  if (!sel) return;
+  form.querySelectorAll('.money').forEach(box => {
+    box.querySelector('.cur').textContent = sel.value;
+    const v = box.querySelector('input').value, n = parseFloat(v);
+    box.nextElementSibling.textContent = v !== '' && isFinite(n) ? Money.number(n, sel.value, uiLocale()) : '';
+  });
+}
+document.addEventListener('change', e => { if (e.target.matches('select[name=currency], select[name=simCur]')) syncMoney(e.target.form); });
+document.addEventListener('input', e => { if (e.target.matches('.money input')) syncMoney(e.target.form); });
+
+// Instalment, months and total cost are linked (total = instalment × months). Only the one not typed by hand is
+// filled in: if the total was touched last, the instalment is computed from it.
+let totalLinked = 'instalment';
+const round2 = x => Math.round(x * 100) / 100;
+$('fSim').addEventListener('input', e => {
+  const f = $('fSim').elements, n = e.target.name;
+  if (n === 'crTotal') totalLinked = 'total';
+  else if (n === 'crAmount') totalLinked = 'instalment';
+  else if (n !== 'crMonths') return;
+  const months = +f.crMonths.value;
+  if (totalLinked === 'total') { if (months > 0 && f.crTotal.value) f.crAmount.value = round2(+f.crTotal.value / months); }
+  else f.crTotal.value = months > 0 && f.crAmount.value ? round2(+f.crAmount.value * months) : '';
+  syncMoney($('fSim'));
+});
+
+// The debt block only shows when the box is ticked. "All" uses the amount received, in a locked field;
+// otherwise an amount is asked for.
+function syncCover() {
+  const f = $('fSim').elements, on = !$('fsCredit').disabled && $('crCover').checked;
+  const all = $('crCoverAll').checked;
+  $('fsCover').disabled = $('fsCover').hidden = !on;
+  f.crCoverAmt.readOnly = all;
+  if (all) f.crCoverAmt.value = f.crReceived.value;
+  syncMoney($('fSim'));
+}
+$('fSim').addEventListener('input', syncCover);
+$('fSim').addEventListener('change', syncCover);
+
+$('openSim').addEventListener('click', () => $('dlgSim').showModal());
+$('closeSim').addEventListener('click', () => $('dlgSim').close());
+$('clearSim').addEventListener('click', () => {
+  simParams = null;
+  $('fSim').reset();
+  $('fsIncome').disabled = $('fsCredit').disabled = true;
+  totalLinked = 'instalment';
+  syncGroups($('fSim'));
+  syncCover(); renderSim();
+});
+
+$('fSim').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target.elements, p = { currency: f.simCur.value };
+  if ($('useIncome').checked) {
+    p.income = { amount: +f.inAmount.value, repeat: f.repeat.value, date: f.inDate.value, until: f.inUntil.value || undefined, carry: f.inCarry.checked };
+  }
+  if ($('useCredit').checked) {
+    // without a name the default is applied when rendering; the debt money enters on the first instalment's date
+    const c = p.credit = { name: f.crName.value.trim(), received: +f.crReceived.value, amount: +f.crAmount.value,
+      months: +f.crMonths.value, first: f.crFirst.value, cover: 0, disb: f.crFirst.value };
+    if ($('crCover').checked) {
+      c.cover = $('crCoverAll').checked ? c.received : +f.crCoverAmt.value;
+      if (c.cover > c.received) { alert(t('coverTooBig')); return; }
+    }
+  }
+  if (!p.income && !p.credit) { alert(t('tickOne')); return; }
+  simParams = p;
+  renderSim();
+  $('simResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+
+// Default dates, set as `defaultValue` so reset() restores them: a loan's first instalment on the 5th of next month,
+// and a one-off income today.
+const next5 = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 5).toLocaleDateString('en-CA');
+for (const el of [$('fIncome').elements.date, $('fIncome').elements.until, $('fSim').elements.inDate, $('fSim').elements.inUntil]) el.min = todayDate;
+for (const el of [$('fCredit').elements.firstDate, $('fSim').elements.crFirst]) el.defaultValue = next5;
+for (const el of [$('fIncome').elements.date, $('fSim').elements.inDate]) el.defaultValue = todayDate;
+
+// ---------- events ----------
+$('fCredit').addEventListener('submit', e => {
+  e.preventDefault();
+  state.credits.push({ id: state.nextId++, ...creditFromForm(new FormData(e.target)) });
+  e.target.reset(); syncGroups(e.target); save(); render();
+});
+$('fIncome').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  state.incomes.push({ id: state.nextId++, ...incomeFromForm(f) });
+  e.target.reset(); syncGroups(e.target); save(); render();
+});
+
+document.addEventListener('change', e => {
+  const t = e.target, d = t.dataset;
+  if (d.sel) {
+    if (t.checked) selected.add(d.sel); else selected.delete(d.sel);
+    return render();
+  }
+  if (d.selAll) {
+    selected.clear();
+    if (t.checked) sched.months.forEach(m => selected.add(m.key));
+    return render();
+  }
+  if (!d.paid) return;
+  // If the clicked month is selected, apply to that loan in every selected month.
+  const months = selected.has(d.month) ? [...selected] : [d.month];
+  const ids = months.map(m => d.credit + ':' + m).filter(id => sched.itemById[id]);
+  ids.forEach(id => { if (t.checked) state.paid[id] = true; else delete state.paid[id]; });
+  save(); render();
+});
+
+document.addEventListener('click', async e => {
+  const d = e.target.dataset;
+  if (d.clearSel) { selected.clear(); return render(); }
+  if (d.toggleSel) { selectMode = !selectMode; selected.clear(); return render(); }   // leaving discards the selection
+  if (d.undo) return undo();
+  if (d.delCredit) { removing(t('loanRemoved')); state.credits = state.credits.filter(x => x.id != d.delCredit); }
+  else if (d.delIncome) { removing(t('incomeRemoved')); state.incomes = state.incomes.filter(x => x.id != d.delIncome); }
+  else if (d.editCredit) {
+    const c = state.credits.find(x => x.id == d.editCredit);
+    const f = await modal(t('editLoan'), creditFields(c));
+    if (!f) return;
+    Object.assign(c, creditFromForm(f));
+  } else if (d.editIncome) {
+    const i = state.incomes.find(x => x.id == d.editIncome);
+    const f = await modal(t('editIncome'), incomeFields(i));
+    if (!f) return;
+    Object.assign(i, incomeFromForm(f, i));
+  } else return;
+  save(); render();
+});
+
+// ---------- settings ----------
+function renderSettings() {
+  $('curList').innerHTML = curs().map((c, i) => `<div class="currow"><b>${c}</b><span class="cname">${esc(curName(c))}</span>
+    ${i === 0 ? `<span class="pill covered">${t('main')}</span>` : `<button type="button" class="ghost mini" data-cur-main="${c}">${t('makeMain')}</button>`}
+    <button type="button" class="ghost mini" data-cur-del="${c}"${curs().length === 1 ? ' disabled' : ''}>${t('remove')}</button></div>`).join('');
+  $('curAdd').innerHTML = addCurOptions(curs());
+}
+$('openSet').addEventListener('click', () => $('dlgSet').showModal());
+$('closeSet').addEventListener('click', () => $('dlgSet').close());
+$('dlgSet').addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (d.curMain) {
+    state.settings.currencies = [d.curMain, ...curs().filter(c => c !== d.curMain)];
+    document.querySelectorAll('select[data-picked]').forEach(sel => delete sel.dataset.picked);   // forms go back to the main currency
+  }
+  else if (d.curDel && curs().length > 1) state.settings.currencies = curs().filter(c => c !== d.curDel);
+  else return;
+  save(); render();
+});
+// language applies instantly, in Settings and in the first-run dialog
+function setLang(l) { state.settings.lang = l; applyLang(); render(); save(); }
+$('langSel').addEventListener('change', e => setLang(e.target.value));
+$('langSetup').addEventListener('change', e => setLang(e.target.value));
+$('themeSel').addEventListener('change', e => { state.settings.theme = e.target.value; applyTheme(); save(); });
+
+// Each select with groups of fields (`kind` for loans, `repeat` for income) shows only the group that applies
+// (data-kind / data-repeat); the rest is hidden and disabled, so it is neither validated nor submitted.
+function syncGroups(form) {
+  for (const name of ['kind', 'repeat']) {
+    const select = form.elements[name];
+    if (!select) continue;
+    form.querySelectorAll(`[data-${name}]`).forEach(el => {
+      const off = el.dataset[name] !== select.value;
+      el.hidden = off;
+      el.querySelectorAll('input, textarea').forEach(i => { i.disabled = off; });
+    });
+  }
+  syncSchedule(form);
+}
+// Live reading of the pasted schedule: a summary when it is valid, the first error otherwise (which also blocks submitting).
+function syncSchedule(form) {
+  const ta = form.elements.schedule;
+  if (!ta || ta.disabled || !form.elements.currency.value) return;
+  const cur = form.elements.currency.value, status = ta.parentElement.querySelector('.sched-status');
+  const { rows, errors } = Calc.parseSchedule(ta.value, sepOf(cur));
+  let bad = '';
+  if (errors.length) bad = t('schedErr', { line: errors[0].line, why: t('schedErr_' + errors[0].code) });
+  else if (ta.value.trim() && !rows.length) bad = t('schedEmpty');
+  ta.setCustomValidity(bad);
+  status.classList.toggle('bad', !!bad);
+  status.innerHTML = bad ? esc(bad) : rows.length ? t('schedOk', { count: tn('instalments', rows.length),
+    from: monthLabel(rows[0].month), to: monthLabel(rows[rows.length - 1].month),
+    total: money(rows.reduce((s, r) => s + r.amount, 0), cur) }) : '';
+}
+document.addEventListener('change', e => {
+  if (e.target.name === 'kind' || e.target.name === 'repeat') syncGroups(e.target.form);
+  else if (e.target.name === 'currency') syncSchedule(e.target.form);
+});
+document.addEventListener('input', e => { if (e.target.name === 'schedule') syncSchedule(e.target.form); });
+
+
+// remember the currency picked in each form so render() does not overwrite it
+document.addEventListener('change', e => {
+  if (e.target.matches('select') && e.target.closest('#fCredit, #fIncome, #fSim')) e.target.dataset.picked = e.target.value;
+});
+
+// first run: with no saved currencies, ask for language and currencies (cannot be closed without choosing)
+$('dlgSetup').addEventListener('cancel', e => e.preventDefault());
+let setupCurs = [];
+const setupAdd = $('setupAdd');
+function renderSetup() {
+  $('setupList').innerHTML = setupCurs.map(c => `<div class="currow"><b>${c}</b><span class="cname">${esc(curName(c))}</span>
+    <button type="button" class="ghost mini" data-setup-del="${c}">${t('remove')}</button></div>`).join('');
+  $('setupAdd').innerHTML = addCurOptions(setupCurs);
+}
+setupAdd.addEventListener('change', () => {
+  setupAdd.setCustomValidity('');
+  if (setupAdd.value && !setupCurs.includes(setupAdd.value)) setupCurs.push(setupAdd.value);
+  renderSetup();
+});
+$('fSetup').addEventListener('click', e => {
+  const code = e.target.dataset.setupDel;
+  if (code) { setupCurs = setupCurs.filter(c => c !== code); renderSetup(); }
+});
+$('fSetup').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!setupCurs.length) { setupAdd.setCustomValidity(t('pickCur')); setupAdd.reportValidity(); return; }
+  state.settings.currencies = [...setupCurs];
+  $('dlgSetup').close(); save(); render();
+});
+
+$('curAdd').addEventListener('change', e => {
+  const code = e.target.value;
+  if (code && !curs().includes(code)) { state.settings.currencies.push(code); save(); }
+  render();
+});
+
+applyLang();
+render();
+load();
+</script>
+</body>
+</html>
